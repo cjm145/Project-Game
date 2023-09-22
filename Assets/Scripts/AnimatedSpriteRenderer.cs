@@ -2,51 +2,37 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class AnimatedSpriteRenderer : MonoBehaviour
-{
- private SpriteRenderer spriteRenderer;
+public class AnimatedSpriteRenderer : MonoBehaviour {
+    private SpriteRenderer _spriteRenderer;
 
-    public Sprite idleSprite;
-    public Sprite[] animationSprites;
+    public Sprite Idle;
+    public Sprite[] AnimationSprites;
 
-    public float animationTime = 0.25f;
-    private int animationFrame;
+    public float AnimationTime = 0.25f;
+    private int _currentFrame;
 
-    public bool loop = true;
-    public bool idle = true;
+    public bool IsLooping = true;
+    public bool IsIdle = true;
 
-    private void Awake()
-    {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-    }
+    private void Awake() => _spriteRenderer = GetComponent<SpriteRenderer>();
 
-    private void OnEnable()
-    {
-        spriteRenderer.enabled = true;
-    }
+    private void OnEnable() => _spriteRenderer.enabled = true;
 
-    private void OnDisable()
-    {
-        spriteRenderer.enabled = false;
-    }
+    private void OnDisable() => _spriteRenderer.enabled = false;
 
-    private void Start()
-    {
-        InvokeRepeating(nameof(NextFrame), animationTime, animationTime);
-    }
+    private void Start() => InvokeRepeating(nameof(SetNextFrame), AnimationTime, AnimationTime);
 
-    private void NextFrame()
-    {
-        animationFrame++;
+    private void SetNextFrame() {
+        _currentFrame++;
 
-        if (loop && animationFrame >= animationSprites.Length) {
-            animationFrame = 0;
+        if(IsLooping && _currentFrame >= AnimationSprites.Length) {
+            _currentFrame = 0;
         }
 
-        if (idle) {
-            spriteRenderer.sprite = idleSprite;
-        } else if (animationFrame >= 0 && animationFrame < animationSprites.Length) {
-            spriteRenderer.sprite = animationSprites[animationFrame];
+        if(IsIdle) {
+            _spriteRenderer.sprite = Idle;
+        } else if(_currentFrame >= 0 && _currentFrame < AnimationSprites.Length) {
+            _spriteRenderer.sprite = AnimationSprites[_currentFrame];
         }
     }
 

@@ -3,108 +3,116 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class BombController : MonoBehaviour
-{
+public class BombController : MonoBehaviour {
     [Header("Bomb")]
     public KeyCode inputKey = KeyCode.LeftShift;
-    public GameObject bombPrefab;
-    public float bombFuseTime = 3f;
-    public int bombAmount = 1;
-    private int bombsRemaining;
+    public GameObject BombPrefab;
+    public float BombExplodeAfter = 3f;
+    public int BombAmount = 1;
+    private int _bombsRemaining;
 
     [Header("Explosion")]
-    public Explosion explosionPrefab;
-    public LayerMask explosionLayerMask;
-    public float explosionDuration = 1f;
-    public int explosionRadius = 1;
+    public Explosion ExplosionPrefab;
+    public LayerMask ExplosionLayerMask;
+    public LayerMask ElayerLayerMask;
+    public LayerMask EnemyLayerMask;
+    public float ExplosionDur = 1f;
+    public int ExplosionWidth = 1;
 
     [Header("Destructible")]
-    public Tilemap destructibleTiles;
-    public Destructible destructiblePrefab;
+    public Tilemap Destructables;
+    public Destructible DestructablePrefab;
 
-    private void OnEnable()
-    {
-        bombsRemaining = bombAmount;
-    }
+    private void OnEnable() => _bombsRemaining = BombAmount;
 
-    private void Update()
-    {
-        if (bombsRemaining > 0 && Input.GetKeyDown(inputKey)) {
-            StartCoroutine(PlaceBomb());
+    private void Update() {
+        if(_bombsRemaining > 0 && Input.GetKeyDown(inputKey)) {
+            StartCoroutine(PlantBomb());
         }
     }
 
-     private IEnumerator PlaceBomb()
-    {
-        Vector2 position = transform.position;
-        position.x = Mathf.Round(position.x);
-        position.y = Mathf.Round(position.y);
+    private IEnumerator PlantBomb() {
+        Vector2 pos = transform.position;
+        pos.x = Mathf.Round(pos.x);
+        pos.y = Mathf.Round(pos.y);
 
-        GameObject bomb = Instantiate(bombPrefab, position, Quaternion.identity);
-        bombsRemaining--;
+        GameObject b = Instantiate(BombPrefab, pos, Quaternion.identity);
+        _bombsRemaining--;
 
-        yield return new WaitForSeconds(bombFuseTime);
+        SoundPlayer.Instance.PlaySound("BombPlaced");
 
-        position = bomb.transform.position;
-        position.x = Mathf.Round(position.x);
-        position.y = Mathf.Round(position.y);
+        yield return new WaitForSeconds(BombExplodeAfter);
 
-        Explosion explosion = Instantiate(explosionPrefab, position, Quaternion.identity);
-        explosion.SetActiveRenderer(explosion.start);
-        explosion.DestroyAfter(explosionDuration);
+        pos = b.transform.position;
+        pos.x = Mathf.Round(pos.x);
+        pos.y = Mathf.Round(pos.y);
 
-        Explode(position, Vector2.up, explosionRadius);
-        Explode(position, Vector2.down, explosionRadius);
-        Explode(position, Vector2.left, explosionRadius);
-        Explode(position, Vector2.right, explosionRadius);
+        Explosion expl = Instantiate(ExplosionPrefab, pos, Quaternion.identity);
+        expl.SetAnimator(expl.startAnimation);
+        expl.DestroyAfter(ExplosionDur);
 
-        Destroy(bomb);
-        bombsRemaining++;
+        SoundPlayer.Instance.PlaySound("Explosion");
+        CalculateExplosion(pos, Vector2.up, ExplosionWidth);
+        CalculateExplosion(pos, Vector2.down, ExplosionWidth);
+        CalculateExplosion(pos, Vector2.left, ExplosionWidth);
+        CalculateExplosion(pos, Vector2.right, ExplosionWidth);
+
+        Destroy(b);
+        _bombsRemaining++;
     }
 
-    private void Explode(Vector2 position, Vector2 direction, int length)
-    {
-        if (length <= 0) {
+    private void CalculateExplosion(Vector2 pos, Vector2 dir, int length) {
+        if(length <= 0) {
             return;
         }
 
-        position += direction;
+        pos += dir;
 
-        if (Physics2D.OverlapBox(position, Vector2.one / 2f, 0f, explosionLayerMask))
-        {
-            DestroyDestructible(position);
+        if(Physics2D.OverlapBox(pos, Vector2.one / 2f, 0f, ExplosionLayerMask)) {
+            DestructableHit(pos);
+            return;
+        } 
+
+        if(Physics2D.OverlapBox(pos, Vector2.one / 2f, 0f, EnemyLayerMask)) {
+            SoundPlayer.Instance.PlaySound("EnemyDie");
+            Destroy(Physics2D.OverlapBox(pos, Vector2.one / 2f, 0f, EnemyLayerMask).gameObject);
             return;
         }
 
-        Explosion explosion = Instantiate(explosionPrefab, position, Quaternion.identity);
-        explosion.SetActiveRenderer(length > 1 ? explosion.middle : explosion.end);
-        explosion.SetDirection(direction);
-        explosion.DestroyAfter(explosionDuration);
+        Explosion explosion = Instantiate(ExplosionPrefab, pos, Quaternion.identity);
+        explosion.SetAnimator(length > 1 ? explosion.middleAnimation : explosion.endAnimation);
+        explosion.Setdir(dir);
+        explosion.DestroyAfter(ExplosionDur);
 
-        Explode(position, direction, length - 1);
+        if(Physics2D.OverlapBox(pos, Vector2.one / 2f, 0f, ElayerLayerMask)) {
+            FindObjectOfType<MovementControl>().Die();
+            return;
+        }
+
+        CalculateExplosion(pos, dir, length - 1);
     }
 
-     private void DestroyDestructible(Vector2 position)
-    {
-        Vector3Int cell = destructibleTiles.WorldToCell(position);
-        TileBase tile = destructibleTiles.GetTile(cell);
+    private void DestructableHit(Vector2 pos) {
+        Vector3Int cell = Destructables.WorldToCell(pos);
+        TileBase tile = Destructables.GetTile(cell);
 
-        if (tile != null)
-        {
-            Instantiate(destructiblePrefab, position, Quaternion.identity);
-            destructibleTiles.SetTile(cell, null);
+        if(tile != null) {
+            Instantiate(DestructablePrefab, pos, Quaternion.identity);
+            Destructables.SetTile(cell, null);
         }
+    }
+
+    public void IncreaseBlastRadius(int by) {
+        ExplosionWidth += by;
     }
     
-        public void AddBomb()
-    {
-        bombAmount++;
-        bombsRemaining++;
+    public void IncreaseBombCount(int by) {
+        BombAmount += by;
+        _bombsRemaining += by;
     }
-
-    private void OnTriggerExit2D(Collider2D other)
-    {
-        if (other.gameObject.layer == LayerMask.NameToLayer("Bomb")) {
+    
+    private void OnTriggerExit2D(Collider2D other) {
+        if(other.gameObject.layer == LayerMask.NameToLayer("Bomb")) {
             other.isTrigger = false;
         }
     }
